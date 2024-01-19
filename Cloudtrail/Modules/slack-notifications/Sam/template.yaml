@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+
+  This function is to send over CloudTrail alarm notification with detail to a slack channel
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30
+    Environment:
+      Variables:
+        SLACKTOKENSECRET: !Ref SLACKTOKENSECRET
+        SLACKCHANNEL: !Ref SLACKCHANNEL
+        LOGGROUP: !Ref LOGGROUP
+
+
+Parameters:
+  SLACKTOKENSECRET:
+    Type: String
+  SLACKTOKENSECRETARN:
+    Type: String
+  SLACKCHANNEL:
+    Type: String
+  LOGGROUP:
+    Type: String
+  
+
+Resources:
+
+    # EventBridge Rule
+  EventRule: 
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "Event Rule that will trigger a Lambda Function when a Cloudtrail Metric Alarm gets kicked off"
+      EventPattern: 
+        source: 
+          - "aws.cloudwatch"
+        detail: 
+          "alarmName": [{"prefix": "security-events"}]
+          state: 
+            value: ["ALARM"]
+      State: "ENABLED"
+      Targets: 
+        - 
+          Arn: 
+            Fn::GetAtt: 
+              - "CloudTrailNotificationsFunction"
+              - "Arn"
+          Id: "CloudtrailNotificationsTarget"
+
+
+    # Lambda Function
+  CloudTrailNotificationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../Lambda-Function
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Policies: 
+        - Statement:
+          - Sid: CloudwatchSearchLogs
+            Effect: Allow
+            Action:
+            - logs:FilterLogEvents
+            - logs:GetLogEvents
+            - logs:DescribeLogStreams
+            - logs:DescribeMetricFilters
+            Resource: '*'
+        - Statement:
+          - Sid: CloudwatchDescribeAlarms
+            Effect: Allow
+            Action: cloudwatch:DescribeAlarms
+            Resource: '*'
+          - Sid: AccessSlackTokenSecret
+            Effect: Allow
+            Action:
+              - secretsmanager:GetSecretValue
+            Resource: !Ref SLACKTOKENSECRETARN
+
+    # Permissions for event to invoke Lambda function
+  PermissionForEventsToInvokeLambda: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: 
+        Ref: "CloudTrailNotificationsFunction"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "EventRule"
+          - "Arn"
+
+
+
+Outputs:
+  CloudTrailNotificationsARN:
+    Description: "ARN of CloudTrail Notifications Lambda Function"
+    Value: !GetAtt CloudTrailNotificationsFunction.Arn

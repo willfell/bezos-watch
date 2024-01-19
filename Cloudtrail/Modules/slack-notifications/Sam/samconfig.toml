@@ -1,0 +1,16 @@
+version = 0.1
+[default]
+
+[default.build.parameters]
+use_container = true
+manifest = "../Lambda-Function/requirements.txt"
+
+[default.deploy.parameters]
+manifest = "../Lambda-Function/requirements.txt"
+stack_name = "devops-cloudtrail-notifications"
+s3_bucket = "balanced-brief-terraform-state"
+s3_prefix = "log-report"
+region = "us-west-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+image_repositories = []
